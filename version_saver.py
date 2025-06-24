@@ -124,6 +124,27 @@ class VersionSaver:
             
         except Exception as e:
             return False, f"Error opening file: {str(e)}"
+    
+    def remove_version(self, version_path):
+        """Remove a specific version directory"""
+        try:
+            version_path = Path(version_path)
+            if not version_path.exists():
+                return False, "Version file not found"
+            
+            # Get the version directory (parent of the file)
+            version_dir = version_path.parent
+            
+            if not version_dir.exists():
+                return False, "Version directory not found"
+            
+            # Remove the entire version directory and its contents
+            shutil.rmtree(version_dir)
+            
+            return True, "Version removed successfully"
+            
+        except Exception as e:
+            return False, f"Error removing version: {str(e)}"
 
 
 class VersionViewer(tk.Tk):
@@ -197,6 +218,7 @@ class VersionViewer(tk.Tk):
         
         ttk.Button(button_frame, text="Open Selected", command=self.open_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Restore Selected", command=self.restore_selected).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(button_frame, text="Remove Selected", command=self.remove_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Refresh", command=self.load_versions).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Close", command=self.destroy).pack(side=tk.LEFT)
         
@@ -296,15 +318,47 @@ class VersionViewer(tk.Tk):
                 self.status_var.set("Version restored")
             else:
                 messagebox.showerror("Error", message)
+    
+    def remove_selected(self):
+        """Remove the selected version"""
+        version_path = self.get_selected_version_path()
+        if not version_path:
+            messagebox.showwarning("No Selection", "Please select a version to remove.")
+            return
+        
+        # Get version timestamp for confirmation message
+        selection = self.tree.selection()
+        item = self.tree.item(selection[0])
+        timestamp = item.get("values", [""])[0]
+        
+        # Confirm removal
+        result = messagebox.askyesno(
+            "Confirm Remove",
+            f"Are you sure you want to remove this version?\n\n"
+            f"Version: {timestamp}\n"
+            f"File: {self.file_path.name}\n\n"
+            f"This action cannot be undone."
+        )
+        
+        if result:
+            success, message = self.version_saver.remove_version(version_path)
+            if success:
+                messagebox.showinfo("Success", message)
+                self.status_var.set("Version removed")
+                # Refresh the list to show updated versions
+                self.load_versions()
+            else:
+                messagebox.showerror("Error", message)
 
 
 def main():
     """Main entry point"""
     if len(sys.argv) < 2:
-        print("Usage: version_saver.py <command> [file_path]")
+        print("Usage: version_saver.py <command> [file_path] [version_path]")
         print("Commands:")
-        print("  save <file_path>     - Save a version of the file")
-        print("  view <file_path>     - View saved versions")
+        print("  save <file_path>                    - Save a version of the file")
+        print("  view <file_path>                    - View saved versions")
+        print("  remove <file_path> <version_path>   - Remove a specific version")
         return
     
     command = sys.argv[1].lower()
@@ -332,9 +386,24 @@ def main():
         app = VersionViewer(file_path)
         app.mainloop()
     
+    elif command == "remove":
+        if len(sys.argv) < 4:
+            print("Error: File path and version path required for remove command")
+            return
+        
+        file_path = sys.argv[2]
+        version_path = sys.argv[3]
+        version_saver = VersionSaver()
+        success, message = version_saver.remove_version(version_path)
+        
+        if success:
+            print(f"✅ {message}")
+        else:
+            print(f"❌ {message}")
+    
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: save, view")
+        print("Available commands: save, view, remove")
 
 
 if __name__ == "__main__":

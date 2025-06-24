@@ -170,6 +170,8 @@ pyinstaller version_saver.spec --clean
 - **Version Limits**: Automatic cleanup of old versions
 - **File Filters**: Exclude certain file types
 - **Batch Operations**: Save/restore multiple files
+- **Rename Support**: Allow users to rename tracked files and migrate their version history
+- **Remove Support**: Allow users to remove a file and all its version history from tracking
 
 ## 📄 License
 
