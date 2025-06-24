@@ -16,3 +16,43 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Additional Python cache and temporary files
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# PyInstaller specific files
+*.toc
+*.pkg
+*.pyz
+*.html
+*.txt
+base_library.zip
+localpycs/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Windows specific
+*.exe
+*.msi
+*.reg
+
+# macOS specific
+*.app
+
+# Linux specific
+*.deb
+*.rpm
