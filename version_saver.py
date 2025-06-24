@@ -9,7 +9,7 @@ import sys
 import shutil
 import json
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 from datetime import datetime
 from pathlib import Path
 import subprocess
@@ -20,8 +20,8 @@ class VersionSaver:
         self.version_tracker_dir = Path.home() / ".versiontracker"
         self.version_tracker_dir.mkdir(exist_ok=True)
         
-    def save_version(self, file_path):
-        """Save a version of the specified file"""
+    def save_version(self, file_path, comment=None):
+        """Save a version of the specified file, with optional comment"""
         try:
             file_path = Path(file_path)
             if not file_path.exists():
@@ -45,7 +45,8 @@ class VersionSaver:
                 "original_path": str(file_path.absolute()),
                 "saved_at": datetime.now().isoformat(),
                 "file_size": file_path.stat().st_size,
-                "file_modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                "file_modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+                "comment": comment or ""
             }
             
             with open(version_dir / "metadata.json", "w") as f:
@@ -193,17 +194,19 @@ class VersionViewer(tk.Tk):
         ttk.Label(main_frame, text="Saved Versions:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=(0, 5))
         
         # Create treeview for versions
-        columns = ("Timestamp", "Size", "Modified")
+        columns = ("Timestamp", "Size", "Modified", "Comment")
         self.tree = ttk.Treeview(main_frame, columns=columns, show="headings", height=10)
         
         # Configure columns
         self.tree.heading("Timestamp", text="Timestamp")
         self.tree.heading("Size", text="Size")
         self.tree.heading("Modified", text="Modified")
+        self.tree.heading("Comment", text="Comment")
         
         self.tree.column("Timestamp", width=150)
         self.tree.column("Size", width=100)
         self.tree.column("Modified", width=150)
+        self.tree.column("Comment", width=200)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -216,6 +219,7 @@ class VersionViewer(tk.Tk):
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=4, column=0, columnspan=3, pady=(10, 0))
         
+        ttk.Button(button_frame, text="Save Version", command=self.save_version_with_comment).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Open Selected", command=self.open_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Restore Selected", command=self.restore_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Remove Selected", command=self.remove_selected).pack(side=tk.LEFT, padx=(0, 10))
@@ -247,6 +251,7 @@ class VersionViewer(tk.Tk):
             metadata = version["metadata"]
             file_size = metadata.get("file_size", 0)
             file_modified = metadata.get("file_modified", "")
+            comment = metadata.get("comment", "")
             
             # Format file size
             if file_size < 1024:
@@ -266,7 +271,8 @@ class VersionViewer(tk.Tk):
             self.tree.insert("", "end", values=(
                 version["timestamp"],
                 size_str,
-                modified_str
+                modified_str,
+                comment
             ), tags=(version["path"],))
         
         self.status_var.set(f"Found {len(versions)} version(s)")
@@ -349,14 +355,37 @@ class VersionViewer(tk.Tk):
                 self.load_versions()
             else:
                 messagebox.showerror("Error", message)
+    
+    def save_version_with_comment(self):
+        """Prompt for a comment and save a version"""
+        comment = simpledialog.askstring("Add Comment", "Enter a comment for this version:")
+        if comment is None:
+            self.status_var.set("Save cancelled")
+            return
+        success, message = self.version_saver.save_version(self.file_path, comment)
+        if success:
+            messagebox.showinfo("Success", message)
+            self.status_var.set("Version saved")
+            self.load_versions()
+        else:
+            messagebox.showerror("Error", message)
+            self.status_var.set("Error saving version")
+
+
+def prompt_for_comment_tk(title="Add Comment", prompt="Enter a comment for this version:"):
+    root = tk.Tk()
+    root.withdraw()
+    comment = simpledialog.askstring(title, prompt)
+    root.destroy()
+    return comment
 
 
 def main():
     """Main entry point"""
     if len(sys.argv) < 2:
-        print("Usage: version_saver.py <command> [file_path] [version_path]")
+        print("Usage: version_saver.py <command> [file_path] [version_path] [comment]")
         print("Commands:")
-        print("  save <file_path>                    - Save a version of the file")
+        print("  save <file_path> [comment]           - Save a version of the file (will prompt for comment if not provided)")
         print("  view <file_path>                    - View saved versions")
         print("  remove <file_path> <version_path>   - Remove a specific version")
         return
@@ -369,8 +398,22 @@ def main():
             return
         
         file_path = sys.argv[2]
+        # Try to get comment from argument, else prompt
+        if len(sys.argv) >= 4:
+            comment = " ".join(sys.argv[3:])
+        else:
+            # Try to prompt in terminal, fallback to Tkinter dialog if not interactive
+            try:
+                comment = input("Enter a comment for this version: ")
+            except Exception:
+                comment = None
+            if not comment:
+                try:
+                    comment = prompt_for_comment_tk()
+                except Exception:
+                    comment = ""
         version_saver = VersionSaver()
-        success, message = version_saver.save_version(file_path)
+        success, message = version_saver.save_version(file_path, comment)
         
         if success:
             print(f"✅ {message}")

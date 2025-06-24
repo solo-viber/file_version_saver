@@ -25,7 +25,7 @@ def test_version_saver():
     try:
         # Test 1: Save a version
         print("\n1️⃣ Testing version save...")
-        success, message = version_saver.save_version(test_target_file)
+        success, message = version_saver.save_version(test_target_file, comment="Test version 1")
         if success:
             print(f"✅ {message}")
         else:
@@ -45,7 +45,7 @@ def test_version_saver():
         print("\n3️⃣ Testing multiple versions...")
         with open(test_target_file, 'a') as f:
             f.write("\nModified content added")
-        success, message = version_saver.save_version(test_target_file)
+        success, message = version_saver.save_version(test_target_file, comment="Test version 2")
         if success:
             print(f"✅ {message}")
         else:
@@ -96,7 +96,7 @@ def test_remove_version():
         version_saver = VersionSaver()
         # Save a version
         print("\n💾 Saving version...")
-        success, message = version_saver.save_version(test_target_file)
+        success, message = version_saver.save_version(test_target_file, comment="Remove test version")
         print(f"Result: {message}")
         if not success:
             print("❌ Failed to save version")

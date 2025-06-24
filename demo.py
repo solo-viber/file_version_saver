@@ -43,7 +43,7 @@ def demo_version_saving():
     
     # Save initial version
     print("\n1️⃣ Saving initial version...")
-    success, message = vs.save_version(demo_file)
+    success, message = vs.save_version(demo_file, comment="Initial version")
     print(f"   {message}")
     
     # Modify file and save another version
@@ -51,7 +51,7 @@ def demo_version_saving():
     with open(demo_file, 'a') as f:
         f.write(f"\n\n## Update 1\nAdded at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     
-    success, message = vs.save_version(demo_file)
+    success, message = vs.save_version(demo_file, comment="Update 1: Added more content")
     print(f"   {message}")
     
     # Modify again and save third version
@@ -59,7 +59,7 @@ def demo_version_saving():
     with open(demo_file, 'a') as f:
         f.write(f"\n## Update 2\nFinal update at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     
-    success, message = vs.save_version(demo_file)
+    success, message = vs.save_version(demo_file, comment="Update 2: Final update")
     print(f"   {message}")
     
     # Show all versions

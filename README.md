@@ -13,7 +13,7 @@ A simple Windows utility that adds "Save Version" and "View Versions" options to
 
 ## ✨ Features
 
-- **Save Version**: Right-click any file and save a timestamped version
+- **Save Version**: Right-click any file and save a timestamped version with a required comment
 - **View Versions**: Browse all saved versions of a file with a clean GUI
 - **Restore Versions**: Restore any previous version with automatic backup
 - **Open Versions**: Open any saved version with its default application
@@ -70,7 +70,7 @@ file_version_saver/
 ### Saving a Version
 1. Right-click any file in Windows Explorer
 2. Select "Save Version"
-3. The file is copied to `%USERPROFILE%\.versiontracker\<filename>\<timestamp>\`
+3. You will be prompted to enter a comment for this version. The file is then copied to `%USERPROFILE%\.versiontracker\<filename>\<timestamp>\` along with your comment.
 
 ### Viewing Versions
 1. Right-click any file in Windows Explorer
@@ -110,8 +110,8 @@ Versions are stored in your user profile:
 
 ### Running from Source
 ```bash
-# Save a version
-python version_saver.py save "path/to/file.txt"
+# Save a version (will prompt for a comment)
+python version_saver.py save "path/to/file.txt" [comment]
 
 # View versions
 python version_saver.py view "path/to/file.txt"
@@ -134,10 +134,10 @@ pyinstaller version_saver.spec --clean
 - **PyInstaller**: For creating standalone executable
 
 ### Architecture
-- **VersionSaver Class**: Core functionality for saving, retrieving, and restoring versions
-- **VersionViewer Class**: Tkinter GUI for browsing and managing versions
-- **Command Line Interface**: Supports `save` and `view` commands
-- **Windows Integration**: Registry-based context menu integration
+- **VersionSaver Class**: Core functionality for saving, retrieving, and restoring versions (now supports comments)
+- **VersionViewer Class**: Tkinter GUI for browsing and managing versions (shows comments)
+- **Command Line Interface**: Supports `save` and `view` commands, always prompts for a comment when saving
+- **Windows Integration**: Registry-based context menu integration, prompts for a comment when saving
 
 ### Security Features
 - Automatic backup creation before restoration
