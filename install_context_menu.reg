@@ -1,0 +1,27 @@
+Windows Registry Editor Version 5.00
+
+; File Version Saver Context Menu Integration
+; This registry file adds "Save Version" and "View Versions" to the right-click context menu
+
+; Add "Save Version" command for all files
+[HKEY_CLASSES_ROOT\*\shell\SaveVersion]
+@="Save Version"
+"Icon"="shell32.dll,44"
+
+[HKEY_CLASSES_ROOT\*\shell\SaveVersion\command]
+@="\"C:\\Program Files\\FileVersionSaver\\version_saver.exe\" save \"%1\""
+
+; Add "View Versions" command for all files
+[HKEY_CLASSES_ROOT\*\shell\ViewVersions]
+@="View Versions"
+"Icon"="shell32.dll,45"
+
+[HKEY_CLASSES_ROOT\*\shell\ViewVersions\command]
+@="\"C:\\Program Files\\FileVersionSaver\\version_saver.exe\" view \"%1\""
+
+; Add separator before our menu items (optional)
+[HKEY_CLASSES_ROOT\*\shell\SaveVersion]
+"Position"="Top"
+
+[HKEY_CLASSES_ROOT\*\shell\ViewVersions]
+"Position"="Top" 

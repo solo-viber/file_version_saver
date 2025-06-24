@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; File Version Saver Context Menu Uninstaller
+; This registry file removes the "Save Version" and "View Versions" context menu items
+
+; Remove "Save Version" command
+[-HKEY_CLASSES_ROOT\*\shell\SaveVersion]
+
+; Remove "View Versions" command
+[-HKEY_CLASSES_ROOT\*\shell\ViewVersions] 
