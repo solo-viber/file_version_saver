@@ -26,6 +26,33 @@ class VersionSaver:
     def __init__(self):
         self.version_tracker_dir = Path.home() / ".versiontracker"
         self.version_tracker_dir.mkdir(exist_ok=True)
+        # Ensure the .versiontracker folder is hidden on Windows
+        if platform.system() == "Windows":
+            try:
+                subprocess.call(['attrib', '+h', str(self.version_tracker_dir)])
+            except Exception:
+                pass
+        self.index_file = self.version_tracker_dir / "index.json"
+        self.index = self._load_index()
+        self._migrate_existing_versions()
+
+    def _load_index(self):
+        if self.index_file.exists():
+            try:
+                with open(self.index_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                # Corrupt or unreadable index, start fresh
+                return []
+        else:
+            return []
+
+    def _save_index(self):
+        try:
+            with open(self.index_file, "w", encoding="utf-8") as f:
+                json.dump(self.index, f, indent=2)
+        except Exception as e:
+            print(f"Error saving index: {e}")
         
     def save_version(self, file_path, comment=None, base_dir=None):
         """Save a version of the specified file, with optional comment and optional base_dir"""
@@ -40,12 +67,25 @@ class VersionSaver:
             # Use custom base_dir if provided, else default
             if base_dir:
                 base_dir = Path(base_dir)
-                # Always use a .versiontracker subfolder in the chosen directory
                 file_versions_dir = base_dir / ".versiontracker" / file_path.name
                 file_versions_dir.mkdir(exist_ok=True, parents=True)
+                # Ensure the .versiontracker folder is hidden on Windows
+                if platform.system() == "Windows":
+                    try:
+                        subprocess.call(['attrib', '+h', str(base_dir / ".versiontracker")])
+                    except Exception:
+                        pass
+                storage_location = str(base_dir)
             else:
                 file_versions_dir = self.version_tracker_dir / file_path.name
                 file_versions_dir.mkdir(exist_ok=True)
+                # Ensure the .versiontracker folder is hidden on Windows
+                if platform.system() == "Windows":
+                    try:
+                        subprocess.call(['attrib', '+h', str(self.version_tracker_dir)])
+                    except Exception:
+                        pass
+                storage_location = str(self.version_tracker_dir)
             
             # Create timestamp directory
             timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -68,38 +108,53 @@ class VersionSaver:
             with open(version_dir / "metadata.json", "w") as f:
                 json.dump(metadata, f, indent=2)
             
+            # Add entry to index
+            index_entry = {
+                "original_path": str(file_path.absolute()),
+                "version_file_path": str(version_file_path),
+                "timestamp": timestamp,
+                "comment": comment or "",
+                "storage_location": storage_location,
+                "metadata_path": str(version_dir / "metadata.json"),
+                "saved_at": metadata["saved_at"],
+                "file_size": metadata["file_size"],
+                "file_modified": metadata["file_modified"]
+            }
+            self.index.append(index_entry)
+            self._save_index()
+
             return True, f"Version saved: {timestamp}"
             
         except Exception as e:
             return False, f"Error saving version: {str(e)}"
     
     def get_versions(self, file_path):
-        """Get all saved versions for a file"""
+        """Get all saved versions for a file from the index"""
         try:
-            file_path = Path(file_path)
-            file_versions_dir = self.version_tracker_dir / file_path.name
-            
-            if not file_versions_dir.exists():
-                return []
-            
-            versions = []
-            for version_dir in sorted(file_versions_dir.iterdir(), reverse=True):
-                if version_dir.is_dir():
-                    metadata_file = version_dir / "metadata.json"
-                    if metadata_file.exists():
-                        with open(metadata_file, "r") as f:
-                            metadata = json.load(f)
-                        versions.append({
-                            "timestamp": version_dir.name,
-                            "path": str(version_dir / file_path.name),
-                            "metadata": metadata
-                        })
-            
+            file_path = Path(file_path).absolute()
+            # Find all index entries matching this file's absolute path
+            versions = [
+                {
+                    "timestamp": entry["timestamp"],
+                    "path": entry["version_file_path"],
+                    "metadata": self._load_metadata(entry["metadata_path"])
+                }
+                for entry in self.index
+                if Path(entry["original_path"]) == file_path
+            ]
+            # Sort by timestamp descending
+            versions.sort(key=lambda v: v["timestamp"], reverse=True)
             return versions
-            
         except Exception as e:
             print(f"Error getting versions: {str(e)}")
             return []
+
+    def _load_metadata(self, metadata_path):
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
     
     def restore_version(self, version_path, original_path):
         """Restore a version to the original location"""
@@ -143,7 +198,7 @@ class VersionSaver:
             return False, f"Error opening file: {str(e)}"
     
     def remove_version(self, version_path):
-        """Remove a specific version directory"""
+        """Remove a specific version directory and its index entry"""
         try:
             version_path = Path(version_path)
             if not version_path.exists():
@@ -151,17 +206,55 @@ class VersionSaver:
             
             # Get the version directory (parent of the file)
             version_dir = version_path.parent
-            
             if not version_dir.exists():
                 return False, "Version directory not found"
             
             # Remove the entire version directory and its contents
             shutil.rmtree(version_dir)
             
+            # Remove from index
+            old_len = len(self.index)
+            self.index = [entry for entry in self.index if Path(entry["version_file_path"]) != version_path]
+            if len(self.index) < old_len:
+                self._save_index()
+
             return True, "Version removed successfully"
             
         except Exception as e:
             return False, f"Error removing version: {str(e)}"
+
+    def _migrate_existing_versions(self):
+        """Scan the default version storage and add any missing versions to the index."""
+        # Build a set of all version file paths already in the index
+        indexed_paths = set(entry["version_file_path"] for entry in self.index)
+        for file_dir in self.version_tracker_dir.iterdir():
+            if file_dir.is_dir():
+                for version_dir in file_dir.iterdir():
+                    if version_dir.is_dir():
+                        version_file = version_dir / file_dir.name
+                        metadata_file = version_dir / "metadata.json"
+                        if version_file.exists() and metadata_file.exists():
+                            if str(version_file) not in indexed_paths:
+                                # Load metadata
+                                try:
+                                    with open(metadata_file, "r", encoding="utf-8") as f:
+                                        metadata = json.load(f)
+                                except Exception:
+                                    metadata = {}
+                                # Add to index
+                                entry = {
+                                    "original_path": metadata.get("original_path", ""),
+                                    "version_file_path": str(version_file),
+                                    "timestamp": version_dir.name,
+                                    "comment": metadata.get("comment", ""),
+                                    "storage_location": str(self.version_tracker_dir),
+                                    "metadata_path": str(metadata_file),
+                                    "saved_at": metadata.get("saved_at", ""),
+                                    "file_size": metadata.get("file_size", 0),
+                                    "file_modified": metadata.get("file_modified", "")
+                                }
+                                self.index.append(entry)
+        self._save_index()
 
 
 class VersionViewer(tk.Tk):
