@@ -265,7 +265,7 @@ class VersionViewer(tk.Tk):
         self.version_saver = VersionSaver()
         
         self.title(f"File Versions - {self.file_path.name}")
-        self.geometry("600x400")
+        self.geometry("600x450")
         self.resizable(True, True)
         
         # Center window
@@ -297,10 +297,16 @@ class VersionViewer(tk.Tk):
         
         # File info
         ttk.Label(main_frame, text=f"File: {self.file_path.name}", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
-        ttk.Label(main_frame, text=f"Path: {self.file_path.absolute()}", font=("Arial", 9)).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
+        ttk.Label(main_frame, text=f"Original Path: {self.file_path.absolute()}", font=("Arial", 9)).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=(0, 2))
+        
+        # Selected version path label
+        self.selected_version_path_var = tk.StringVar()
+        self.selected_version_path_var.set("")
+        self.selected_version_path_label = ttk.Label(main_frame, textvariable=self.selected_version_path_var, font=("Arial", 8, "italic"))
+        self.selected_version_path_label.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
         
         # Versions list
-        ttk.Label(main_frame, text="Saved Versions:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=(0, 5))
+        ttk.Label(main_frame, text="Saved Versions:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=(0, 5))
         
         # Create treeview for versions
         columns = ("Timestamp", "Size", "Modified", "Comment")
@@ -321,28 +327,45 @@ class VersionViewer(tk.Tk):
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
-        self.tree.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        scrollbar.grid(row=3, column=2, sticky=(tk.N, tk.S), pady=(0, 10))
+        self.tree.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        scrollbar.grid(row=4, column=2, sticky=(tk.N, tk.S), pady=(0, 10))
         
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=3, pady=(10, 0))
+        button_frame.grid(row=5, column=0, columnspan=3, pady=(10, 0))
         
         ttk.Button(button_frame, text="Save Version", command=self.save_version_with_comment).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Open Selected", command=self.open_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Restore Selected", command=self.restore_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Remove Selected", command=self.remove_selected).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(button_frame, text="Refresh", command=self.load_versions).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Close", command=self.destroy).pack(side=tk.LEFT)
         
         # Bind double-click to open
         self.tree.bind("<Double-1>", lambda e: self.open_selected())
+        # Bind selection change to update selected version path
+        self.tree.bind("<<TreeviewSelect>>", self.on_version_select)
         
         # Status bar
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+        status_bar.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
+    
+    def on_version_select(self, event=None):
+        """Update the selected version path label when a version is selected"""
+        version_path = self.get_selected_version_path()
+        if version_path:
+            # Show only up to the folder before .versiontracker
+            norm_path = os.path.normpath(version_path)
+            parts = norm_path.split(os.sep)
+            if ".versiontracker" in parts:
+                idx = parts.index(".versiontracker")
+                base_path = os.sep.join(parts[:idx])
+                self.selected_version_path_var.set(f"Selected version path: {base_path}")
+            else:
+                self.selected_version_path_var.set(f"Selected version path: {os.path.dirname(version_path)})")
+        else:
+            self.selected_version_path_var.set("")
     
     def load_versions(self):
         """Load and display versions"""
@@ -354,6 +377,7 @@ class VersionViewer(tk.Tk):
         
         if not versions:
             self.status_var.set("No saved versions found")
+            self.selected_version_path_var.set("")
             return
         
         for version in versions:
@@ -385,6 +409,8 @@ class VersionViewer(tk.Tk):
             ), tags=(version["path"],))
         
         self.status_var.set(f"Found {len(versions)} version(s)")
+        # Clear selected version path label after reload
+        self.selected_version_path_var.set("")
     
     def get_selected_version_path(self):
         """Get the file path of the selected version"""
