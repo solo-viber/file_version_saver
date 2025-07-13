@@ -11,6 +11,15 @@ Windows Registry Editor Version 5.00
 [HKEY_CLASSES_ROOT\*\shell\SaveVersion\command]
 @="\"C:\\Program Files\\FileVersionSaver\\version_saver.exe\" save \"%1\""
 
+; Add "Save Version (Choose Location)" command for all files
+[HKEY_CLASSES_ROOT\*\shell\SaveVersionChooseLocation]
+@="Save Version (Choose Location)"
+"Icon"="shell32.dll,44"
+"Position"="Top"
+
+[HKEY_CLASSES_ROOT\*\shell\SaveVersionChooseLocation\command]
+@="\"C:\\Program Files\\FileVersionSaver\\version_saver.exe\" save \"%1\" --choose-location"
+
 ; Add "View Versions" command for all files
 [HKEY_CLASSES_ROOT\*\shell\ViewVersions]
 @="View Versions"

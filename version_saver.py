@@ -4,8 +4,8 @@ File Version Saver - MVP
 Right-click context menu integration for saving and restoring file versions
 """
 
-import os
 import sys
+import os
 import shutil
 import json
 import tkinter as tk
@@ -15,21 +15,37 @@ from pathlib import Path
 import subprocess
 import platform
 
+# DEBUG: Log arguments for troubleshooting context menu issues
+try:
+    with open("C:\\version_saver_args.log", "a", encoding="utf-8") as f:
+        f.write("ARGS: " + repr(sys.argv) + "\\n")
+except Exception:
+    pass
+
 class VersionSaver:
     def __init__(self):
         self.version_tracker_dir = Path.home() / ".versiontracker"
         self.version_tracker_dir.mkdir(exist_ok=True)
         
-    def save_version(self, file_path, comment=None):
-        """Save a version of the specified file, with optional comment"""
+    def save_version(self, file_path, comment=None, base_dir=None):
+        """Save a version of the specified file, with optional comment and optional base_dir"""
         try:
             file_path = Path(file_path)
             if not file_path.exists():
                 return False, f"File not found: {file_path}"
+            # Abort if base_dir is an empty string (user cancelled folder picker)
+            if base_dir == "":
+                return False, "No directory chosen. Operation aborted."
             
-            # Create version directory for this file
-            file_versions_dir = self.version_tracker_dir / file_path.name
-            file_versions_dir.mkdir(exist_ok=True)
+            # Use custom base_dir if provided, else default
+            if base_dir:
+                base_dir = Path(base_dir)
+                # Always use a .versiontracker subfolder in the chosen directory
+                file_versions_dir = base_dir / ".versiontracker" / file_path.name
+                file_versions_dir.mkdir(exist_ok=True, parents=True)
+            else:
+                file_versions_dir = self.version_tracker_dir / file_path.name
+                file_versions_dir.mkdir(exist_ok=True)
             
             # Create timestamp directory
             timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -382,26 +398,29 @@ def prompt_for_comment_tk(title="Add Comment", prompt="Enter a comment for this 
 
 def main():
     """Main entry point"""
-    if len(sys.argv) < 2:
-        print("Usage: version_saver.py <command> [file_path] [version_path] [comment]")
-        print("Commands:")
-        print("  save <file_path> [comment]           - Save a version of the file (will prompt for comment if not provided)")
-        print("  view <file_path>                    - View saved versions")
-        print("  remove <file_path> <version_path>   - Remove a specific version")
-        return
-    
-    command = sys.argv[1].lower()
-    
+    import argparse
+    parser = argparse.ArgumentParser(description="File Version Saver")
+    parser.add_argument("command", choices=["save", "view", "remove"], help="Command to run")
+    parser.add_argument("file_path", nargs="?", help="Path to the file")
+    parser.add_argument("version_path", nargs="?", help="Path to the version (for remove)")
+    parser.add_argument("--choose-location", action="store_true", help="Prompt for folder to save version")
+    args, unknown = parser.parse_known_args()
+
+    command = args.command.lower()
+
+    # Determine if --choose-location is present in unknowns (for robust handling)
+    choose_location = args.choose_location or ("--choose-location" in unknown)
+    # Remove --choose-location from unknowns if present
+    unknown = [u for u in unknown if u != "--choose-location"]
+
     if command == "save":
-        if len(sys.argv) < 3:
+        if not args.file_path:
             print("Error: File path required for save command")
             return
-        
-        file_path = sys.argv[2]
-        # Try to get comment from argument, else prompt
-        if len(sys.argv) >= 4:
-            comment = " ".join(sys.argv[3:])
-        else:
+        file_path = args.file_path
+        # Treat any remaining unknowns as the comment
+        comment = " ".join(unknown) if unknown else None
+        if not comment:
             # Try to prompt in terminal, fallback to Tkinter dialog if not interactive
             try:
                 comment = input("Enter a comment for this version: ")
@@ -412,38 +431,41 @@ def main():
                     comment = prompt_for_comment_tk()
                 except Exception:
                     comment = ""
+        base_dir = None
+        if choose_location:
+            root = tk.Tk()
+            root.withdraw()
+            chosen_dir = filedialog.askdirectory(title="Choose folder to save version")
+            root.destroy()
+            if not chosen_dir:
+                print("Operation cancelled: No folder selected.")
+                return
+            base_dir = chosen_dir
         version_saver = VersionSaver()
-        success, message = version_saver.save_version(file_path, comment)
-        
+        success, message = version_saver.save_version(file_path, comment, base_dir=base_dir)
         if success:
             print(f"✅ {message}")
         else:
             print(f"❌ {message}")
-    
     elif command == "view":
-        if len(sys.argv) < 3:
+        if not args.file_path:
             print("Error: File path required for view command")
             return
-        
-        file_path = sys.argv[2]
+        file_path = args.file_path
         app = VersionViewer(file_path)
         app.mainloop()
-    
     elif command == "remove":
-        if len(sys.argv) < 4:
+        if not args.file_path or not args.version_path:
             print("Error: File path and version path required for remove command")
             return
-        
-        file_path = sys.argv[2]
-        version_path = sys.argv[3]
+        file_path = args.file_path
+        version_path = args.version_path
         version_saver = VersionSaver()
         success, message = version_saver.remove_version(version_path)
-        
         if success:
             print(f"✅ {message}")
         else:
             print(f"❌ {message}")
-    
     else:
         print(f"Unknown command: {command}")
         print("Available commands: save, view, remove")

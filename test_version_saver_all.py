@@ -146,11 +146,64 @@ def test_remove_version():
         print("\n✅ Remove version test completed successfully!")
         return True
 
+def test_save_version_choose_location():
+    """Test saving a version to a custom chosen location and aborting on cancel"""
+    print("\n🧪 Testing Save Version with --choose-location...")
+    print("=" * 50)
+    import types
+    import version_saver
+    import tkinter.filedialog
+    # Create a temporary test file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        test_content = "This is a test file for choose-location\nCreated at: " + str(time.time())
+        f.write(test_content)
+        test_target_file = f.name
+    print(f"📄 Created test file: {test_target_file}")
+    version_saver_obj = VersionSaver()
+    # Create a temp dir to act as the chosen location
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Patch filedialog.askdirectory to return temp_dir
+        original_askdirectory = tkinter.filedialog.askdirectory
+        tkinter.filedialog.askdirectory = lambda *a, **k: temp_dir
+        try:
+            success, message = version_saver_obj.save_version(test_target_file, comment="Choose location test", base_dir=temp_dir)
+            if success:
+                print(f"✅ Saved to chosen location: {message}")
+                # Check file exists in chosen location
+                chosen_path = Path(temp_dir) / Path(test_target_file).name
+                assert chosen_path.exists(), "Chosen location directory does not exist!"
+                # Check at least one timestamped version exists
+                subdirs = list(chosen_path.iterdir())
+                assert subdirs, "No version subdirectory created in chosen location!"
+            else:
+                print(f"❌ {message}")
+                return False
+        finally:
+            tkinter.filedialog.askdirectory = original_askdirectory
+    # Simulate cancel (askdirectory returns empty string)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        tkinter.filedialog.askdirectory = lambda *a, **k: ""
+        try:
+            # Should abort and not create anything
+            result = version_saver_obj.save_version(test_target_file, comment="Should abort", base_dir="")
+            assert not result[0], "Should not save if no directory is chosen!"
+            print("✅ Aborted gracefully when no directory chosen.")
+        finally:
+            tkinter.filedialog.askdirectory = original_askdirectory
+    try:
+        os.unlink(test_target_file)
+        print(f"\n🧹 Cleaned up test file: {test_target_file}")
+    except Exception:
+        pass
+    return True
+
 if __name__ == "__main__":
     all_passed = True
     if not test_version_saver():
         all_passed = False
     if not test_remove_version():
+        all_passed = False
+    if not test_save_version_choose_location():
         all_passed = False
     if all_passed:
         print("\n✅ All tests passed!")

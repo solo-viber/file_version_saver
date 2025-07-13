@@ -5,7 +5,7 @@ REM Install PyInstaller if not already installed
 pip install pyinstaller
 
 REM Build the executable
-pyinstaller version_saver.spec --clean
+python -m PyInstaller version_saver.spec --clean
 
 echo.
 echo Build complete! Executable created in dist/version_saver.exe
