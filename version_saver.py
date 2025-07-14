@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 import subprocess
 import platform
+import ctypes
+from ctypes import wintypes
 
 # DEBUG: Log arguments for troubleshooting context menu issues
 try:
@@ -29,12 +31,52 @@ class VersionSaver:
         # Ensure the .versiontracker folder is hidden on Windows
         if platform.system() == "Windows":
             try:
-                subprocess.call(['attrib', '+h', str(self.version_tracker_dir)])
+                subprocess.call(['attrib', '-h', str(self.version_tracker_dir)])
             except Exception:
                 pass
         self.index_file = self.version_tracker_dir / "index.json"
         self.index = self._load_index()
         self._migrate_existing_versions()
+
+    def get_file_id(self, path):
+        if platform.system() != "Windows":
+            raise OSError("NTFS File ID is only supported on Windows/NTFS.")
+        FILE_READ_EA = 0x0008
+        OPEN_EXISTING = 3
+        class BY_HANDLE_FILE_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("dwFileAttributes", wintypes.DWORD),
+                ("ftCreationTime", wintypes.FILETIME),
+                ("ftLastAccessTime", wintypes.FILETIME),
+                ("ftLastWriteTime", wintypes.FILETIME),
+                ("dwVolumeSerialNumber", wintypes.DWORD),
+                ("nFileSizeHigh", wintypes.DWORD),
+                ("nFileSizeLow", wintypes.DWORD),
+                ("nNumberOfLinks", wintypes.DWORD),
+                ("nFileIndexHigh", wintypes.DWORD),
+                ("nFileIndexLow", wintypes.DWORD),
+            ]
+        CreateFile = ctypes.windll.kernel32.CreateFileW
+        GetFileInformationByHandle = ctypes.windll.kernel32.GetFileInformationByHandle
+        CloseHandle = ctypes.windll.kernel32.CloseHandle
+        handle = CreateFile(
+            str(path),
+            FILE_READ_EA,
+            0,
+            None,
+            OPEN_EXISTING,
+            0,
+            None
+        )
+        if handle == -1 or handle == 0:
+            raise OSError("Could not open file: " + str(path))
+        info = BY_HANDLE_FILE_INFORMATION()
+        res = GetFileInformationByHandle(handle, ctypes.byref(info))
+        CloseHandle(handle)
+        if not res:
+            raise OSError("Could not get file information: " + str(path))
+        file_id = (info.nFileIndexHigh << 32) + info.nFileIndexLow
+        return str(file_id)
 
     def _load_index(self):
         if self.index_file.exists():
@@ -67,22 +109,22 @@ class VersionSaver:
             # Use custom base_dir if provided, else default
             if base_dir:
                 base_dir = Path(base_dir)
-                file_versions_dir = base_dir / ".versiontracker" / file_path.name
+                file_versions_dir = base_dir / ".versiontracker" / self.get_file_id(file_path)
                 file_versions_dir.mkdir(exist_ok=True, parents=True)
                 # Ensure the .versiontracker folder is hidden on Windows
                 if platform.system() == "Windows":
                     try:
-                        subprocess.call(['attrib', '+h', str(base_dir / ".versiontracker")])
+                        subprocess.call(['attrib', '-h', str(base_dir / ".versiontracker")])
                     except Exception:
                         pass
                 storage_location = str(base_dir)
             else:
-                file_versions_dir = self.version_tracker_dir / file_path.name
+                file_versions_dir = self.version_tracker_dir / self.get_file_id(file_path)
                 file_versions_dir.mkdir(exist_ok=True)
                 # Ensure the .versiontracker folder is hidden on Windows
                 if platform.system() == "Windows":
                     try:
-                        subprocess.call(['attrib', '+h', str(self.version_tracker_dir)])
+                        subprocess.call(['attrib', '-h', str(self.version_tracker_dir)])
                     except Exception:
                         pass
                 storage_location = str(self.version_tracker_dir)
@@ -98,11 +140,12 @@ class VersionSaver:
             
             # Save metadata
             metadata = {
-                "original_path": str(file_path.absolute()),
                 "saved_at": datetime.now().isoformat(),
                 "file_size": file_path.stat().st_size,
                 "file_modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-                "comment": comment or ""
+                "comment": comment or "",
+                "file_id": self.get_file_id(file_path),
+                "file_name": file_path.name
             }
             
             with open(version_dir / "metadata.json", "w") as f:
@@ -110,7 +153,8 @@ class VersionSaver:
             
             # Add entry to index
             index_entry = {
-                "original_path": str(file_path.absolute()),
+                "file_id": self.get_file_id(file_path),
+                "file_name": file_path.name,
                 "version_file_path": str(version_file_path),
                 "timestamp": timestamp,
                 "comment": comment or "",
@@ -132,6 +176,7 @@ class VersionSaver:
         """Get all saved versions for a file from the index"""
         try:
             file_path = Path(file_path).absolute()
+            file_id = self.get_file_id(file_path)
             # Find all index entries matching this file's absolute path
             versions = [
                 {
@@ -140,7 +185,7 @@ class VersionSaver:
                     "metadata": self._load_metadata(entry["metadata_path"])
                 }
                 for entry in self.index
-                if Path(entry["original_path"]) == file_path
+                if entry["file_id"] == file_id
             ]
             # Sort by timestamp descending
             versions.sort(key=lambda v: v["timestamp"], reverse=True)
@@ -243,7 +288,8 @@ class VersionSaver:
                                     metadata = {}
                                 # Add to index
                                 entry = {
-                                    "original_path": metadata.get("original_path", ""),
+                                    "file_id": metadata.get("file_id", ""),
+                                    "file_name": metadata.get("file_name", ""),
                                     "version_file_path": str(version_file),
                                     "timestamp": version_dir.name,
                                     "comment": metadata.get("comment", ""),

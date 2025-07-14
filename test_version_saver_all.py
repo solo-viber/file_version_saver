@@ -185,7 +185,8 @@ def test_save_version_choose_location():
                 if success:
                     print(f"✅ Saved to chosen location: {message}")
                     # Check file exists in chosen location
-                    chosen_path = Path(temp_dir) / ".versiontracker" / Path(test_target_file).name
+                    file_id = version_saver_obj.get_file_id(test_target_file)
+                    chosen_path = Path(temp_dir) / ".versiontracker" / file_id
                     assert chosen_path.exists(), "Chosen location directory does not exist!"
                     # Check at least one timestamped version exists
                     subdirs = list(chosen_path.iterdir())
